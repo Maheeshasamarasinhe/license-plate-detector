@@ -20,9 +20,10 @@ CLIENT = InferenceHTTPClient(
     api_key="fcCYBiPPncENLdquyj7F"
 )
 
-cap = cv2.VideoCapture('./sample.mp4')
-
 vehicles = [2, 3, 5, 7]
+
+# Load video
+cap = cv2.VideoCapture('./sample.mp4')
 
 # Get video properties for output
 frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -61,7 +62,7 @@ while ret:
         try:
             license_plate_result = CLIENT.infer(frame, model_id="license-plate-recognition-rxg4e/4")
             
-            # Draw license plates
+            # Process license plates
             for prediction in license_plate_result['predictions']:
                 x = prediction['x']
                 y = prediction['y']
@@ -69,15 +70,71 @@ while ret:
                 height = prediction['height']
                 confidence = prediction['confidence']
                 
-                # Draw license plate bounding box
+                # Calculate bounding box coordinates
                 x1 = int(x - width/2)
                 y1 = int(y - height/2)
                 x2 = int(x + width/2)
                 y2 = int(y + height/2)
                 
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                cv2.putText(frame, f'License Plate ({confidence:.2f})', (x1, y1-10), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+                # Assign license plate to car
+                xcar1, ycar1, xcar2, ycar2, car_id = get_car([x1, y1, x2, y2, confidence, 0], track_ids)
+                
+                if car_id != -1:
+                    # Crop license plate
+                    license_plate_crop = frame[int(y1):int(y2), int(x1):int(x2), :]
+                    
+                    # Process license plate
+                    license_plate_crop_gray = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY)
+                    _, license_plate_crop_thresh = cv2.threshold(license_plate_crop_gray, 64, 255, cv2.THRESH_BINARY_INV)
+                    
+                    # Read license plate number
+                    license_plate_text, license_plate_text_score = read_license_plate(license_plate_crop_thresh)
+                    
+                    if license_plate_text is not None:
+                        # Store results
+                        results[frame_nmr][car_id] = {'car': {'bbox': [xcar1, ycar1, xcar2, ycar2]},
+                                                      'license_plate': {'bbox': [x1, y1, x2, y2],
+                                                                        'text': license_plate_text,
+                                                                        'bbox_score': confidence,
+                                                                        'text_score': license_plate_text_score}}
+                        
+                        # Draw license plate bounding box
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                        
+                        # Display license plate text on TOP of the VEHICLE frame with red background
+                        text = license_plate_text
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        font_scale = 1.2
+                        font_thickness = 2
+                        
+                        # Get text size
+                        (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
+                        
+                        # Calculate position - top of vehicle bounding box
+                        text_x = int(xcar1)
+                        text_y = int(ycar1) - 10  # Above the vehicle box
+                        
+                        # Draw red background rectangle
+                        padding = 10
+                        bg_x1 = text_x - padding // 2
+                        bg_y1 = text_y - text_height - padding
+                        bg_x2 = text_x + text_width + padding // 2
+                        bg_y2 = text_y + baseline + padding // 2
+                        
+                        cv2.rectangle(frame, (bg_x1, bg_y1), (bg_x2, bg_y2), (0, 0, 255), -1)  # Red filled rectangle
+                        
+                        # Draw white text on top of the red background
+                        cv2.putText(frame, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
+                    else:
+                        # Draw license plate box even if text not readable
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                        cv2.putText(frame, f'License Plate ({confidence:.2f})', (x1, y1-10), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+                else:
+                    # Draw license plate box if no car assigned
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                    cv2.putText(frame, f'License Plate ({confidence:.2f})', (x1, y1-10), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
         except Exception as e:
             print(f"License plate detection error on frame {frame_nmr}: {e}")
 

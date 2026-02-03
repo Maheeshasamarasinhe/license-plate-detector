@@ -1,1 +1,2 @@
 frame_nmr,car_id,car_bbox,license_plate_bbox,license_plate_bbox_score,license_number,license_number_score
+0,1.0,[720.573974609375 154.7647705078125 1557.675048828125 755.711181640625],[1088 630 1320 695],0.8667821288108826,LJK5564,0.6964046115770842

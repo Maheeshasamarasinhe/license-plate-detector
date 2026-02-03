@@ -28,7 +28,18 @@ def write_csv(results, output_path):
         results (dict): Dictionary containing the results.
         output_path (str): Path to the output CSV file.
     """
-    with open(output_path, 'w') as f:
+    # Try to open the file, if permission denied, use alternative filename
+    try:
+        f = open(output_path, 'w')
+    except PermissionError:
+        # File is locked, try alternative filename
+        import os
+        base, ext = os.path.splitext(output_path)
+        output_path = f"{base}_new{ext}"
+        print(f"Original file is locked. Saving to: {output_path}")
+        f = open(output_path, 'w')
+    
+    with f:
         f.write('{},{},{},{},{},{},{}\n'.format('frame_nmr', 'car_id', 'car_bbox',
                                                 'license_plate_bbox', 'license_plate_bbox_score', 'license_number',
                                                 'license_number_score'))
@@ -123,8 +134,18 @@ def read_license_plate(license_plate_crop):
 
         text = text.upper().replace(' ', '')
 
+        # First try strict format validation
         if license_complies_format(text):
             return format_license(text), score
+    
+    # If no strict format match, return the best detection with alphanumeric characters only
+    for detection in detections:
+        bbox, text, score = detection
+        text = text.upper().replace(' ', '')
+        # Keep only alphanumeric characters
+        text = ''.join(c for c in text if c.isalnum())
+        if len(text) >= 4 and score > 0.3:  # At least 4 characters and reasonable confidence
+            return text, score
 
     return None, None
 
