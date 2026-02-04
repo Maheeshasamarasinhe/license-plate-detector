@@ -22,12 +22,49 @@ dict_int_to_char = {'0': 'O',
 
 def write_csv(results, output_path):
     """
-    Write the results to a CSV file.
+    Write the results to a CSV file - ONLY the highest scoring frame per car_id.
+    Analyzes all frames but outputs only the best detection for each vehicle.
 
     Args:
         results (dict): Dictionary containing the results.
         output_path (str): Path to the output CSV file.
     """
+    # First, collect all detections per car_id and find the highest scoring one
+    best_detections = {}  # {car_id: {'frame_nmr': x, 'data': {...}, 'combined_score': y}}
+    
+    total_frames_analyzed = 0
+    total_detections = 0
+    
+    for frame_nmr in results.keys():
+        total_frames_analyzed += 1
+        for car_id in results[frame_nmr].keys():
+            if 'car' in results[frame_nmr][car_id].keys() and \
+               'license_plate' in results[frame_nmr][car_id].keys() and \
+               'text' in results[frame_nmr][car_id]['license_plate'].keys():
+                
+                total_detections += 1
+                
+                # Calculate combined score (average of bbox_score and text_score)
+                bbox_score = results[frame_nmr][car_id]['license_plate']['bbox_score']
+                text_score = results[frame_nmr][car_id]['license_plate']['text_score']
+                combined_score = (bbox_score + text_score) / 2
+                
+                # Check if this is a better detection for this car_id
+                if car_id not in best_detections or combined_score > best_detections[car_id]['combined_score']:
+                    best_detections[car_id] = {
+                        'frame_nmr': frame_nmr,
+                        'data': results[frame_nmr][car_id],
+                        'combined_score': combined_score
+                    }
+    
+    print(f"\n{'='*60}")
+    print(f"ANALYSIS SUMMARY")
+    print(f"{'='*60}")
+    print(f"Total frames analyzed: {total_frames_analyzed}")
+    print(f"Total license plate detections: {total_detections}")
+    print(f"Unique vehicles detected: {len(best_detections)}")
+    print(f"{'='*60}\n")
+    
     # Try to open the file, if permission denied, use alternative filename
     try:
         f = open(output_path, 'w')
@@ -44,29 +81,39 @@ def write_csv(results, output_path):
                                                 'license_plate_bbox', 'license_plate_bbox_score', 'license_number',
                                                 'license_number_score'))
 
-        for frame_nmr in results.keys():
-            for car_id in results[frame_nmr].keys():
-                print(results[frame_nmr][car_id])
-                if 'car' in results[frame_nmr][car_id].keys() and \
-                   'license_plate' in results[frame_nmr][car_id].keys() and \
-                   'text' in results[frame_nmr][car_id]['license_plate'].keys():
-                    f.write('{},{},{},{},{},{},{}\n'.format(frame_nmr,
-                                                            car_id,
-                                                            '[{} {} {} {}]'.format(
-                                                                results[frame_nmr][car_id]['car']['bbox'][0],
-                                                                results[frame_nmr][car_id]['car']['bbox'][1],
-                                                                results[frame_nmr][car_id]['car']['bbox'][2],
-                                                                results[frame_nmr][car_id]['car']['bbox'][3]),
-                                                            '[{} {} {} {}]'.format(
-                                                                results[frame_nmr][car_id]['license_plate']['bbox'][0],
-                                                                results[frame_nmr][car_id]['license_plate']['bbox'][1],
-                                                                results[frame_nmr][car_id]['license_plate']['bbox'][2],
-                                                                results[frame_nmr][car_id]['license_plate']['bbox'][3]),
-                                                            results[frame_nmr][car_id]['license_plate']['bbox_score'],
-                                                            results[frame_nmr][car_id]['license_plate']['text'],
-                                                            results[frame_nmr][car_id]['license_plate']['text_score'])
-                            )
+        # Write only the best detection for each car_id
+        for car_id in sorted(best_detections.keys()):
+            detection = best_detections[car_id]
+            frame_nmr = detection['frame_nmr']
+            data = detection['data']
+            
+            print(f"Car ID {car_id}: Best frame #{frame_nmr} | "
+                  f"License: {data['license_plate']['text']} | "
+                  f"BBox Score: {data['license_plate']['bbox_score']:.3f} | "
+                  f"Text Score: {data['license_plate']['text_score']:.3f} | "
+                  f"Combined: {detection['combined_score']:.3f}")
+            
+            f.write('{},{},{},{},{},{},{}\n'.format(
+                frame_nmr,
+                car_id,
+                '[{} {} {} {}]'.format(
+                    data['car']['bbox'][0],
+                    data['car']['bbox'][1],
+                    data['car']['bbox'][2],
+                    data['car']['bbox'][3]),
+                '[{} {} {} {}]'.format(
+                    data['license_plate']['bbox'][0],
+                    data['license_plate']['bbox'][1],
+                    data['license_plate']['bbox'][2],
+                    data['license_plate']['bbox'][3]),
+                data['license_plate']['bbox_score'],
+                data['license_plate']['text'],
+                data['license_plate']['text_score'])
+            )
         f.close()
+    
+    print(f"\nResults saved to: {output_path}")
+    print(f"Only {len(best_detections)} best detections written (1 per vehicle)")
 
 
 def license_complies_format(text):
