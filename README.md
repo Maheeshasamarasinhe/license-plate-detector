@@ -157,18 +157,6 @@ The detection results are saved in CSV format with the following columns:
 | `license_number` | Extracted license plate text |
 | `license_number_score` | OCR confidence score |
 
----
-
-## 🎥 Demo Video
-
-<p align="center">
-<a href="https://www.youtube.com/watch?v=fyJB1t0o0ms">
-    <img width="500" src="https://utils-computervisiondeveloper.s3.amazonaws.com/thumbnails/with_play_button/anpr_yolo2.jpg" alt="Watch the video">
-    </br>📺 Watch Tutorial on YouTube
-</a>
-</p>
-
----
 
 ## 📚 Resources
 
